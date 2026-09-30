@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from google import genai
 from google.genai import errors
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load variables from .env
 load_dotenv()
@@ -17,6 +18,17 @@ client = genai.Client(api_key=api_key)
 
 # Create FastAPI application
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Request structure
