@@ -2,40 +2,46 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from openai import OpenAI
 from pydantic import BaseModel
+from google import genai
 
-# Load environment variables from .env
+# Load variables from .env
 load_dotenv()
 
-# Create OpenAI client
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+# Get Gemini API key
+api_key = os.getenv("GEMINI_API_KEY")
 
+# Create Gemini client
+client = genai.Client(api_key=api_key)
+
+# Create FastAPI application
 app = FastAPI()
 
 
-# Request model
+# Request structure
 class ChatRequest(BaseModel):
     message: str
 
 
+# Test endpoint
 @app.get("/")
 def home():
     return {
-        "message": "AI Chatbot Backend is running!"
+        "message": "AI Chatbot Backend is running with gemini key!"
     }
 
 
+# Chat endpoint
 @app.post("/chat")
 def chat(request: ChatRequest):
 
-    response = client.responses.create(
-        model="gpt-5-mini",
-        input=request.message
+    # Send user's message to Gemini
+    response = client.models.generate_content(
+        model="gemini-3.8-flash",
+        contents=request.message
     )
 
+    # Return Gemini's response
     return {
-        "response": response.output_text
+        "response": response.text
     }
