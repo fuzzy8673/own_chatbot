@@ -2,22 +2,42 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from google import genai
-from google.genai import errors
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from groq import Groq
 
-# Load variables from .env
+
+# --------------------------------------------------
+# Load environment variables from .env
+# --------------------------------------------------
+
 load_dotenv()
 
-# Get Gemini API key
-api_key = os.getenv("GEMINI_API_KEY")
+groq_api_key = os.getenv("GROQ_API_KEY")
 
-# Create Gemini client
-client = genai.Client(api_key=api_key)
+if not groq_api_key:
+    raise RuntimeError("GROQ_API_KEY is not set in the .env file")
 
+
+# --------------------------------------------------
+# Create Groq client
+# --------------------------------------------------
+
+client = Groq(api_key=groq_api_key)
+
+
+# --------------------------------------------------
 # Create FastAPI application
+# --------------------------------------------------
+
 app = FastAPI()
+
+
+# --------------------------------------------------
+# CORS configuration
+# Allows our React frontend to communicate
+# with the FastAPI backend.
+# --------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,12 +51,18 @@ app.add_middleware(
 )
 
 
-# Request structure
+# --------------------------------------------------
+# Request model
+# --------------------------------------------------
+
 class ChatRequest(BaseModel):
     message: str
 
 
-# Test endpoint
+# --------------------------------------------------
+# Home endpoint
+# --------------------------------------------------
+
 @app.get("/")
 def home():
     return {
@@ -44,38 +70,50 @@ def home():
     }
 
 
+# --------------------------------------------------
 # Chat endpoint
+# --------------------------------------------------
+
 @app.post("/chat")
 def chat(request: ChatRequest):
 
     try:
-        # Send user's message to Gemini
-        response = client.models.generate_content(
-            model="gemini-3.8-flash",
-            contents=request.message
+
+        # Send the user's message to Groq
+        response = client.chat.completions.create(
+
+            # We'll use this model initially.
+            # model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
+
+            # Chat messages
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a helpful AI assistant. "
+                        "Give clear, accurate and concise answers."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": request.message
+                }
+            ]
         )
+
+        # Extract the generated text
+        answer = response.choices[0].message.content
 
         return {
-            "response": response.text
+            "response": answer
         }
 
-    except errors.ServerError as e:
-        # Gemini server-side problem, such as 503
-        raise HTTPException(
-            status_code=503,
-            detail="Gemini is temporarily unavailable. Please try again."
-        )
-
-    except errors.ClientError as e:
-        # API key, model, request, quota, etc.
-        raise HTTPException(
-            status_code=400,
-            detail=f"Gemini API request failed: {str(e)}"
-        )
-
     except Exception as e:
-        # Unexpected error
+
+        print("Groq API error:", str(e))
+
         raise HTTPException(
             status_code=500,
-            detail=f"Unexpected server error: {str(e)}"
+            detail=f"Groq API request failed: {str(e)}"
         )
