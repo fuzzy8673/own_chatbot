@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function App() {
   const [input, setInput] = useState("");
@@ -133,33 +135,141 @@ function App() {
 
           <div
             key={index}
-            className={`flex mb-4 ${
-              msg.role === "user"
-                ? "justify-end"
-                : "justify-start"
-            }`}
+            className={`flex mb-4 ${msg.role === "user"
+              ? "justify-end"
+              : "justify-start"
+              }`}
           >
 
             <div
-              className={`max-w-xl rounded-lg px-4 py-3 ${
-                msg.role === "user"
-                  ? "bg-blue-600 text-white"
-                  : msg.role === "error"
+              className={`max-w-xl rounded-lg px-4 py-3 ${msg.role === "user"
+                ? "bg-blue-600 text-white"
+                : msg.role === "error"
                   ? "bg-red-100 text-red-700"
                   : "bg-white shadow"
-              }`}
+                }`}
             >
 
               <div className="text-xs font-semibold mb-1 opacity-70">
                 {msg.role === "user"
                   ? "You"
                   : msg.role === "error"
-                  ? "Error"
-                  : "AI"}
+                    ? "Error"
+                    : "AI"}
               </div>
 
-              <div className="whitespace-pre-wrap">
+              {/* <div className="whitespace-pre-wrap">
                 {msg.content}
+              </div> */}
+
+              <div className="prose prose-sm max-w-none">
+                {/* <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {msg.content}
+                </ReactMarkdown> */}
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => (
+                      <h1 className="text-2xl font-bold mt-4 mb-3">
+                        {children}
+                      </h1>
+                    ),
+
+                    h2: ({ children }) => (
+                      <h2 className="text-xl font-bold mt-4 mb-3">
+                        {children}
+                      </h2>
+                    ),
+
+                    h3: ({ children }) => (
+                      <h3 className="text-lg font-semibold mt-3 mb-2">
+                        {children}
+                      </h3>
+                    ),
+
+                    p: ({ children }) => (
+                      <p className="mb-3 leading-7">
+                        {children}
+                      </p>
+                    ),
+
+                    ul: ({ children }) => (
+                      <ul className="list-disc ml-6 mb-3 space-y-1">
+                        {children}
+                      </ul>
+                    ),
+
+                    ol: ({ children }) => (
+                      <ol className="list-decimal ml-6 mb-3 space-y-1">
+                        {children}
+                      </ol>
+                    ),
+
+                    li: ({ children }) => (
+                      <li>
+                        {children}
+                      </li>
+                    ),
+
+                    strong: ({ children }) => (
+                      <strong className="font-semibold">
+                        {children}
+                      </strong>
+                    ),
+
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-4 border-gray-300 pl-4 italic my-3">
+                        {children}
+                      </blockquote>
+                    ),
+
+                    code: ({ children, className }) => {
+                      const isCodeBlock = className?.startsWith("language-");
+
+                      if (!isCodeBlock) {
+                        return (
+                          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">
+                            {children}
+                          </code>
+                        );
+                      }
+
+                      return (
+                        <code className={className}>
+                          {children}
+                        </code>
+                      );
+                    },
+
+                    pre: ({ children }) => (
+                      <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto my-4 text-sm">
+                        {children}
+                      </pre>
+                    ),
+
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-4">
+                        <table className="border-collapse border border-gray-300 w-full text-sm">
+                          {children}
+                        </table>
+                      </div>
+                    ),
+
+                    th: ({ children }) => (
+                      <th className="border border-gray-300 bg-gray-100 px-3 py-2 text-left font-semibold">
+                        {children}
+                      </th>
+                    ),
+
+                    td: ({ children }) => (
+                      <td className="border border-gray-300 px-3 py-2">
+                        {children}
+                      </td>
+                    ),
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
               </div>
 
             </div>
