@@ -19,24 +19,27 @@ function App() {
   const sendMessage = async () => {
     const userMessage = input.trim();
 
-    // Don't send empty messages
     if (!userMessage || loading) {
       return;
     }
 
-    // Immediately display the user's message
-    setMessages((previousMessages) => [
-      ...previousMessages,
-      {
-        role: "user",
-        content: userMessage,
-      },
-    ]);
+    const newUserMessage = {
+      role: "user",
+      content: userMessage,
+    };
 
-    // Clear input box
+    // Only send actual conversation messages to the LLM
+    const conversation = [
+      ...messages.filter(
+        (message) =>
+          message.role === "user" ||
+          message.role === "assistant"
+      ),
+      newUserMessage,
+    ];
+
+    setMessages(conversation);
     setInput("");
-
-    // Show loading state
     setLoading(true);
 
     try {
@@ -48,7 +51,7 @@ function App() {
         },
 
         body: JSON.stringify({
-          message: userMessage,
+          messages: conversation,
         }),
       });
 
@@ -58,7 +61,6 @@ function App() {
         throw new Error(data.detail || "Something went wrong");
       }
 
-      // Add AI response to conversation
       setMessages((previousMessages) => [
         ...previousMessages,
         {
@@ -66,8 +68,9 @@ function App() {
           content: data.response,
         },
       ]);
+
     } catch (error) {
-      // Display error as an assistant message
+
       setMessages((previousMessages) => [
         ...previousMessages,
         {
@@ -75,11 +78,11 @@ function App() {
           content: error.message,
         },
       ]);
+
     } finally {
       setLoading(false);
     }
   };
-
   const handleKeyDown = (event) => {
     // Enter sends the message
     if (event.key === "Enter" && !event.shiftKey) {

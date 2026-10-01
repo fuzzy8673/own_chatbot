@@ -55,8 +55,14 @@ app.add_middleware(
 # Request model
 # --------------------------------------------------
 
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
 class ChatRequest(BaseModel):
-    message: str
+    messages: list[ChatMessage]
 
 
 # --------------------------------------------------
@@ -74,35 +80,42 @@ def home():
 # Chat endpoint
 # --------------------------------------------------
 
+
 @app.post("/chat")
 def chat(request: ChatRequest):
 
     try:
 
-        # Send the user's message to Groq
+        # Convert Pydantic objects into dictionaries
+        conversation = [
+            {
+                "role": message.role,
+                "content": message.content
+            }
+            for message in request.messages
+        ]
+
+        # Add our system instruction at the beginning
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful AI assistant. "
+                    "Give clear, accurate and concise answers. "
+                    "Use Markdown when it improves readability."
+                )
+            }
+        ]
+
+        # Add the conversation history
+        messages.extend(conversation)
+
+        # Send the complete conversation to Groq
         response = client.chat.completions.create(
-
-            # We'll use this model initially.
-            # model="llama-3.3-70b-versatile",
             model="openai/gpt-oss-120b",
-
-            # Chat messages
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful AI assistant. "
-                        "Give clear, accurate and concise answers."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": request.message
-                }
-            ]
+            messages=messages
         )
 
-        # Extract the generated text
         answer = response.choices[0].message.content
 
         return {
@@ -117,3 +130,7 @@ def chat(request: ChatRequest):
             status_code=500,
             detail=f"Groq API request failed: {str(e)}"
         )
+
+
+
+    
