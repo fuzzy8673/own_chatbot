@@ -22,81 +22,6 @@ function App() {
   }, [messages]);
 
 
-  // useEffect(() => {
-  //   messagesEndRef.current?.scrollIntoView({
-  //     behavior: "smooth",
-  //   });
-  // }, [messages, loading]);
-
-  // const sendMessage = async () => {
-  //   const userMessage = input.trim();
-
-  //   if (!userMessage || loading) {
-  //     return;
-  //   }
-
-  //   const newUserMessage = {
-  //     role: "user",
-  //     content: userMessage,
-  //   };
-
-  //   // Only send actual conversation messages to the LLM
-  //   const conversation = [
-  //     ...messages.filter(
-  //       (message) =>
-  //         message.role === "user" ||
-  //         message.role === "assistant"
-  //     ),
-  //     newUserMessage,
-  //   ];
-
-  //   setMessages(conversation);
-  //   setInput("");
-  //   setLoading(true);
-
-  //   try {
-  //     const result = await fetch("http://127.0.0.1:8000/chat", {
-  //       method: "POST",
-
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-
-  //       body: JSON.stringify({
-  //         messages: conversation,
-  //       }),
-  //     });
-
-  //     const data = await result.json();
-
-  //     if (!result.ok) {
-  //       throw new Error(data.detail || "Something went wrong");
-  //     }
-
-  //     setMessages((previousMessages) => [
-  //       ...previousMessages,
-  //       {
-  //         role: "assistant",
-  //         content: data.response,
-  //       },
-  //     ]);
-
-  //   } catch (error) {
-
-  //     setMessages((previousMessages) => [
-  //       ...previousMessages,
-  //       {
-  //         role: "error",
-  //         content: error.message,
-  //       },
-  //     ]);
-
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-
   const handleSend = async () => {
     const userMessage = input.trim();
 
@@ -240,7 +165,6 @@ function App() {
     // Enter sends the message
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      // sendMessage();
       handleSend();
     }
   };
@@ -315,14 +239,9 @@ function App() {
                     : "AI"}
               </div>
 
-              {/* <div className="whitespace-pre-wrap">
-                {msg.content}
-              </div> */}
+            
 
               <div className="prose prose-sm max-w-none">
-                {/* <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content}
-                </ReactMarkdown> */}
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -437,7 +356,6 @@ function App() {
 
 
         {/* Loading indicator */}
-        {/* {loading && ( */}
         {loading &&
           messages[messages.length - 1]?.role === "assistant" &&
           !messages[messages.length - 1]?.content && (
@@ -480,7 +398,6 @@ function App() {
           />
 
           <button
-            // onClick={sendMessage}
             onClick={handleSend}
             disabled={loading || !input.trim()}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
