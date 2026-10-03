@@ -1,5 +1,6 @@
 import os
-
+from fastapi.responses import StreamingResponse   #lets FastAPI send pieces of a response as they're generated.
+import json   #lets us encode each piece as a structured event that React can read reliably.
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -80,57 +81,70 @@ def home():
 # Chat endpoint
 # --------------------------------------------------
 
-
 @app.post("/chat")
 def chat(request: ChatRequest):
 
-    try:
+    # Build the conversation with a system instruction.
+    conversation = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful AI assistant. "
+                "Give clear, accurate and concise answers. "
+                "Use Markdown when it improves readability."
+            )
+        }
+    ]
 
-        # Convert Pydantic objects into dictionaries
-        conversation = [
+    # Add previous user and assistant messages.
+    conversation.extend(
+        [
             {
                 "role": message.role,
                 "content": message.content
             }
             for message in request.messages
         ]
+    )
 
-        # Add our system instruction at the beginning
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful AI assistant. "
-                    "Give clear, accurate and concise answers. "
-                    "Use Markdown when it improves readability."
-                )
-            }
-        ]
+    def generate_response():
+        try:
+            # Ask Groq to stream the response.
+            stream = client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=conversation,
+                stream=True
+            )
 
-        # Add the conversation history
-        messages.extend(conversation)
+            # Send each generated text chunk to the browser.
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
 
-        # Send the complete conversation to Groq
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=messages
-        )
+                if content:
+                    event = json.dumps({"token": content})
+                    yield f"data: {event}\n\n"
 
-        answer = response.choices[0].message.content
+            # Tell the frontend the response is complete.
+            yield 'data: {"done": true}\n\n'
 
-        return {
-            "response": answer
+        except Exception as e:
+            print("Groq streaming error:", str(e))
+
+            # Streaming has already started, so report errors
+            # as events rather than trying to change HTTP status.
+            event = json.dumps({
+                "error": "The AI response was interrupted. Please try again."
+            })
+            yield f"data: {event}\n\n"
+
+    return StreamingResponse(
+        generate_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
         }
-
-    except Exception as e:
-
-        print("Groq API error:", str(e))
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Groq API request failed: {str(e)}"
-        )
-
+    )
 
 
     
