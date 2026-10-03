@@ -10,25 +10,105 @@ function App() {
   const messagesEndRef = useRef(null);
 
   // Scroll to the latest message
+
+
+  // Keep the latest message visible without restarting smooth scrolling
+  // for every token received from the AI.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
+      behavior: "auto",
+      block: "end",
     });
-  }, [messages, loading]);
+  }, [messages]);
 
-  const sendMessage = async () => {
+
+  // useEffect(() => {
+  //   messagesEndRef.current?.scrollIntoView({
+  //     behavior: "smooth",
+  //   });
+  // }, [messages, loading]);
+
+  // const sendMessage = async () => {
+  //   const userMessage = input.trim();
+
+  //   if (!userMessage || loading) {
+  //     return;
+  //   }
+
+  //   const newUserMessage = {
+  //     role: "user",
+  //     content: userMessage,
+  //   };
+
+  //   // Only send actual conversation messages to the LLM
+  //   const conversation = [
+  //     ...messages.filter(
+  //       (message) =>
+  //         message.role === "user" ||
+  //         message.role === "assistant"
+  //     ),
+  //     newUserMessage,
+  //   ];
+
+  //   setMessages(conversation);
+  //   setInput("");
+  //   setLoading(true);
+
+  //   try {
+  //     const result = await fetch("http://127.0.0.1:8000/chat", {
+  //       method: "POST",
+
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+
+  //       body: JSON.stringify({
+  //         messages: conversation,
+  //       }),
+  //     });
+
+  //     const data = await result.json();
+
+  //     if (!result.ok) {
+  //       throw new Error(data.detail || "Something went wrong");
+  //     }
+
+  //     setMessages((previousMessages) => [
+  //       ...previousMessages,
+  //       {
+  //         role: "assistant",
+  //         content: data.response,
+  //       },
+  //     ]);
+
+  //   } catch (error) {
+
+  //     setMessages((previousMessages) => [
+  //       ...previousMessages,
+  //       {
+  //         role: "error",
+  //         content: error.message,
+  //       },
+  //     ]);
+
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+
+  const handleSend = async () => {
     const userMessage = input.trim();
 
-    if (!userMessage || loading) {
-      return;
-    }
+    // Do not send empty messages or overlapping requests.
+    if (!userMessage || loading) return;
 
     const newUserMessage = {
       role: "user",
       content: userMessage,
     };
 
-    // Only send actual conversation messages to the LLM
+    // Include previous messages so the AI retains conversation context.
     const conversation = [
       ...messages.filter(
         (message) =>
@@ -38,56 +118,130 @@ function App() {
       newUserMessage,
     ];
 
-    setMessages(conversation);
+    // Create an empty assistant message that we will update as tokens arrive.
+    const assistantIndex = conversation.length;
+
+    setMessages([
+      ...conversation,
+      { role: "assistant", content: "" },
+    ]);
+
     setInput("");
     setLoading(true);
 
     try {
-      const result = await fetch("http://127.0.0.1:8000/chat", {
-        method: "POST",
+      const response = await fetch(
+        "http://127.0.0.1:8000/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: conversation,
+          }),
+        }
+      );
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+      // Handle HTTP errors before reading the stream.
+      if (!response.ok) {
+        let errorMessage = "Something went wrong.";
 
-        body: JSON.stringify({
-          messages: conversation,
-        }),
-      });
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          // Keep the default message if the response is not JSON.
+        }
 
-      const data = await result.json();
-
-      if (!result.ok) {
-        throw new Error(data.detail || "Something went wrong");
+        throw new Error(errorMessage);
       }
 
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        {
-          role: "assistant",
-          content: data.response,
-        },
-      ]);
+      if (!response.body) {
+        throw new Error("Streaming is not supported by this response.");
+      }
 
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let buffer = "";
+      let streamFinished = false;
+
+      // Read incoming bytes and convert them into text.
+      while (!streamFinished) {
+        const { value, done } = await reader.read();
+
+        if (done) {
+          buffer += decoder.decode();
+          streamFinished = true;
+        } else {
+          buffer += decoder.decode(value, { stream: true });
+        }
+
+        // A single network chunk may contain part of an event
+        // or several events. Process only complete SSE events.
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+
+        for (const eventText of events) {
+          const dataLine = eventText
+            .split("\n")
+            .find((line) => line.startsWith("data: "));
+
+          if (!dataLine) continue;
+
+          const event = JSON.parse(dataLine.slice(6));
+
+          if (event.token) {
+            // Append each token to the same assistant message.
+            setMessages((previousMessages) =>
+              previousMessages.map((message, index) =>
+                index === assistantIndex
+                  ? {
+                    ...message,
+                    content: message.content + event.token,
+                  }
+                  : message
+              )
+            );
+          }
+
+          if (event.error) {
+            throw new Error(event.error);
+          }
+
+          if (event.done) {
+            streamFinished = true;
+            break;
+          }
+        }
+      }
     } catch (error) {
-
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        {
-          role: "error",
-          content: error.message,
-        },
-      ]);
-
+      // Show the error in the assistant message.
+      setMessages((previousMessages) =>
+        previousMessages.map((message, index) =>
+          index === assistantIndex
+            ? {
+              ...message,
+              content:
+                message.content ||
+                `Error: ${error.message}`,
+            }
+            : message
+        )
+      );
     } finally {
       setLoading(false);
     }
   };
+
+
   const handleKeyDown = (event) => {
     // Enter sends the message
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      sendMessage();
+      // sendMessage();
+      handleSend();
     }
   };
 
@@ -283,23 +437,26 @@ function App() {
 
 
         {/* Loading indicator */}
-        {loading && (
-          <div className="flex justify-start mb-4">
+        {/* {loading && ( */}
+        {loading &&
+          messages[messages.length - 1]?.role === "assistant" &&
+          !messages[messages.length - 1]?.content && (
+            <div className="flex justify-start mb-4">
 
-            <div className="bg-white shadow rounded-lg px-4 py-3">
+              <div className="bg-white shadow rounded-lg px-4 py-3">
 
-              <div className="text-xs font-semibold mb-1 text-gray-500">
-                AI
-              </div>
+                <div className="text-xs font-semibold mb-1 text-gray-500">
+                  AI
+                </div>
 
-              <div className="text-gray-500">
-                AI is thinking...
+                <div className="text-gray-500">
+                  AI is thinking...
+                </div>
+
               </div>
 
             </div>
-
-          </div>
-        )}
+          )}
 
         {/* Invisible element used for auto-scroll */}
         <div ref={messagesEndRef} />
@@ -323,7 +480,8 @@ function App() {
           />
 
           <button
-            onClick={sendMessage}
+            // onClick={sendMessage}
+            onClick={handleSend}
             disabled={loading || !input.trim()}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
           >
