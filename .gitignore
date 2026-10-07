@@ -15,3 +15,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local database files
+backend/*.db
+backend/*.db-journal
+backend/*.db-shm
+backend/*.db-wal

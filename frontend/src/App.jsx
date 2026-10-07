@@ -6,6 +6,7 @@ function App() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -64,6 +65,7 @@ function App() {
           },
           body: JSON.stringify({
             messages: conversation,
+            conversation_id: conversationId,
           }),
         }
       );
@@ -116,6 +118,10 @@ function App() {
           if (!dataLine) continue;
 
           const event = JSON.parse(dataLine.slice(6));
+
+          if (event.conversation_id) {
+            setConversationId(event.conversation_id);
+          }
 
           if (event.token) {
             // Append each token to the same assistant message.
@@ -171,6 +177,8 @@ function App() {
 
   const clearChat = () => {
     setMessages([]);
+    setConversationId(null);
+    setInput("");
   };
 
   return (
@@ -239,7 +247,7 @@ function App() {
                     : "AI"}
               </div>
 
-            
+
 
               <div className="prose prose-sm max-w-none">
                 <ReactMarkdown
