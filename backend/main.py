@@ -7,7 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
 from database import get_connection, init_db
-from database import get_connection, init_db, create_conversation
+# from database import get_connection, init_db, create_conversation
+from database import (
+    get_connection,
+    init_db,
+    create_conversation,
+    get_conversations,
+    get_conversation_messages,
+)
 
 
 # --------------------------------------------------
@@ -98,165 +105,58 @@ def database_test():
         "database": "connected",
         "conversation_count": result["count"]
     }
+
+
+# --------------------------------------------------
+# conversations endpoint
+# --------------------------------------------------
+
+@app.get("/conversations")
+def list_conversations():
+    """Return all saved conversations."""
+
+    conversations = get_conversations()
+
+    return {
+        "conversations": conversations
+    }
+
+# --------------------------------------------------
+# conversations ID endpoint
+# --------------------------------------------------
+
+@app.get("/conversations/{conversation_id}")
+def get_conversation(conversation_id: int):
+    """Return a conversation and all its messages."""
+
+    # Check whether the conversation exists.
+    with get_connection() as connection:
+        conversation = connection.execute(
+            """
+            SELECT id, title, created_at, updated_at
+            FROM conversations
+            WHERE id = ?
+            """,
+            (conversation_id,)
+        ).fetchone()
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
+
+    messages = get_conversation_messages(conversation_id)
+
+    return {
+        "conversation": dict(conversation),
+        "messages": messages
+    }
+
+
 # --------------------------------------------------
 # Chat endpoint
 # --------------------------------------------------
-
-# @app.post("/chat")
-# def chat(request: ChatRequest):
-
-#     # Create a new conversation if this is the first message.
-#     conversation_id = request.conversation_id
-
-#     if conversation_id is None:
-#         conversation_id = create_conversation()
-
-#         # Get the latest user message.
-#     latest_user_message = next(
-#         (
-#             message
-#             for message in reversed(request.messages)
-#             if message.role == "user"
-#         ),
-#         None
-#     )
-
-#     if latest_user_message:
-#         with get_connection() as connection:
-#             connection.execute(
-#                 """
-#                 INSERT INTO messages
-#                     (conversation_id, role, content)
-#                 VALUES (?, ?, ?)
-#                 """,
-#                 (
-#                     conversation_id,
-#                     latest_user_message.role,
-#                     latest_user_message.content
-#                 )
-#             )
-
-#     # Build the conversation with a system instruction.
-#     conversation = [
-#         {
-#             "role": "system",
-#             "content": (
-#                 "You are a helpful AI assistant. "
-#                 "Give clear, accurate and concise answers. "
-#                 "Use Markdown when it improves readability."
-#             )
-#         }
-#     ]
-
-#     # Add previous user and assistant messages.
-#     conversation.extend(
-#         [
-#             {
-#                 "role": message.role,
-#                 "content": message.content
-#             }
-#             for message in request.messages
-#         ]
-#     )
-
-#     # def generate_response():
-#     #     try:
-#     #         # Ask Groq to stream the response.
-#     #         stream = client.chat.completions.create(
-#     #             model="openai/gpt-oss-120b",
-#     #             messages=conversation,
-#     #             stream=True
-#     #         )
-
-#     #         # Send each generated text chunk to the browser.
-#     #         for chunk in stream:
-#     #             content = chunk.choices[0].delta.content
-
-#     #             if content:
-#     #                 event = json.dumps({"token": content})
-#     #                 yield f"data: {event}\n\n"
-
-#     #         # Tell the frontend the response is complete.
-#     #         yield 'data: {"done": true}\n\n'
-
-#     #     except Exception as e:
-#     #         print("Groq streaming error:", str(e))
-
-#     #         # Streaming has already started, so report errors
-#     #         # as events rather than trying to change HTTP status.
-#     #         event = json.dumps({
-#     #             "error": "The AI response was interrupted. Please try again."
-#     #         })
-#     #         yield f"data: {event}\n\n"
-
-#     def generate_response():
-#         try:
-#             stream = client.chat.completions.create(
-#                 model="openai/gpt-oss-120b",
-#                 messages=conversation,
-#                 stream=True
-#             )
-
-#             # Store the complete AI response while
-#             # simultaneously streaming it to the frontend.
-#             full_response = ""
-
-#             for chunk in stream:
-#                 content = chunk.choices[0].delta.content
-
-#                 if content:
-#                     full_response += content
-
-#                     # Send this piece to the frontend immediately.
-#                     event = json.dumps({"token": content})
-#                     yield f"data: {event}\n\n"
-
-#             # Only save the assistant response after
-#             # the entire stream has completed successfully.
-#             if full_response:
-#                 with get_connection() as connection:
-#                     connection.execute(
-#                         """
-#                         INSERT INTO messages
-#                             (conversation_id, role, content)
-#                         VALUES (?, ?, ?)
-#                         """,
-#                         (
-#                             conversation_id,
-#                             "assistant",
-#                             full_response
-#                         )
-#                     )
-
-#                     # Update the conversation timestamp.
-#                     connection.execute(
-#                         """
-#                         UPDATE conversations
-#                         SET updated_at = CURRENT_TIMESTAMP
-#                         WHERE id = ?
-#                         """,
-#                         (conversation_id,)
-#                     )
-
-#             # Tell the frontend that generation is complete.
-#             yield 'data: {"done": true}\n\n'
-
-#         except Exception as e:
-#             print("Groq streaming error:", str(e))
-
-#             event = json.dumps({
-#                 "error": "The AI response was interrupted. Please try again."
-#             })
-
-#             yield f"data: {event}\n\n"
-#         return StreamingResponse(
-#             generate_response(),
-#             media_type="text/event-stream",
-#             headers={
-#                 "Cache-Control": "no-cache",
-#                 "X-Accel-Buffering": "no"
-#             }
-#         )
 
 
 @app.post("/chat")

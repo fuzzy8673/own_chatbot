@@ -7,6 +7,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
+  const [conversations, setConversations] = useState([]);
 
   const messagesEndRef = useRef(null);
 
@@ -22,6 +23,61 @@ function App() {
     });
   }, [messages]);
 
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const response = await fetch(
+          "http://127.0.0.1:8000/conversations"
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to load conversations");
+        }
+
+        const data = await response.json();
+
+        setConversations(data.conversations);
+      } catch (error) {
+        console.error(
+          "Error loading conversations:",
+          error
+        );
+      }
+    };
+
+    loadConversations();
+  }, []);
+
+
+  const loadConversation = async (id) => {
+    if (loading) return;
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/conversations/${id}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to load conversation");
+      }
+
+      const data = await response.json();
+
+      setConversationId(data.conversation.id);
+
+      setMessages(
+        data.messages.map((message) => ({
+          role: message.role,
+          content: message.content,
+        }))
+      );
+    } catch (error) {
+      console.error(
+        "Error loading conversation:",
+        error
+      );
+    }
+  };
 
   const handleSend = async () => {
     const userMessage = input.trim();
@@ -206,6 +262,30 @@ function App() {
 
       {/* Chat messages */}
       <main className="flex-1 max-w-3xl w-full mx-auto p-6 pb-32">
+
+        <div className="mb-6 bg-white rounded-lg shadow p-4">
+          <h2 className="font-semibold mb-3">
+            Saved Conversations
+          </h2>
+
+          <div className="flex flex-wrap gap-2">
+            {conversations.map((conversation) => (
+              <button
+                key={conversation.id}
+                onClick={() =>
+                  loadConversation(conversation.id)
+                }
+                disabled={loading}
+                className={`px-3 py-2 rounded-lg text-sm ${conversation.id === conversationId
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 hover:bg-gray-200"
+                  }`}
+              >
+                Chat {conversation.id}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {messages.length === 0 && (
           <div className="text-center text-gray-500 mt-20">

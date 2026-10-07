@@ -73,3 +73,35 @@ def create_conversation(title="New Chat"):
         )
 
         return cursor.lastrowid
+
+
+def get_conversations():
+    """Return all conversations ordered by most recently updated."""
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, title, created_at, updated_at
+            FROM conversations
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def get_conversation_messages(conversation_id):
+    """Return all messages belonging to a conversation."""
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, role, content, created_at
+            FROM messages
+            WHERE conversation_id = ?
+            ORDER BY id ASC
+            """,
+            (conversation_id,)
+        ).fetchall()
+
+    return [dict(row) for row in rows]
