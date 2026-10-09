@@ -14,8 +14,6 @@ from database import (
     create_conversation,
     get_conversations,
     get_conversation_messages,
-    update_conversation_title,
-    delete_conversation,
 )
 
 
@@ -79,11 +77,6 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     conversation_id: int | None = None
-
-
-
-class RenameConversationRequest(BaseModel):
-    title: str
 
 
 # --------------------------------------------------
@@ -158,66 +151,6 @@ def get_conversation(conversation_id: int):
     return {
         "conversation": dict(conversation),
         "messages": messages
-    }
-
-
-# --------------------------------------------------
-# Rename conversation endpoint
-# --------------------------------------------------
-
-@app.patch("/conversations/{conversation_id}")
-def rename_conversation(
-    conversation_id: int,
-    request: RenameConversationRequest
-):
-    """Rename a saved conversation."""
-    title = request.title.strip()
-
-    if not title:
-        raise HTTPException(
-            status_code=400,
-            detail="Conversation title cannot be empty"
-        )
-
-    if len(title) > 100:
-        raise HTTPException(
-            status_code=400,
-            detail="Conversation title must be 100 characters or fewer"
-        )
-
-    updated = update_conversation_title(conversation_id, title)
-
-    if not updated:
-        raise HTTPException(
-            status_code=404,
-            detail="Conversation not found"
-        )
-
-    return {
-        "message": "Conversation renamed successfully",
-        "conversation_id": conversation_id,
-        "title": title
-    }
-
-
-# --------------------------------------------------
-# Delete conversation endpoint
-# --------------------------------------------------
-
-@app.delete("/conversations/{conversation_id}")
-def remove_conversation(conversation_id: int):
-    """Delete a conversation and its associated messages."""
-    deleted = delete_conversation(conversation_id)
-
-    if not deleted:
-        raise HTTPException(
-            status_code=404,
-            detail="Conversation not found"
-        )
-
-    return {
-        "message": "Conversation deleted successfully",
-        "conversation_id": conversation_id
     }
 
 

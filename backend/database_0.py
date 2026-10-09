@@ -105,27 +105,3 @@ def get_conversation_messages(conversation_id):
         ).fetchall()
 
     return [dict(row) for row in rows]
-
-
-def update_conversation_title(conversation_id, title):
-    """Update a conversation title. Return True if a row was updated."""
-    with get_connection() as connection:
-        cursor = connection.execute(
-            """
-            UPDATE conversations
-            SET title = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (title, conversation_id)
-        )
-        return cursor.rowcount > 0
-
-
-def delete_conversation(conversation_id):
-    """Delete a conversation; related messages are removed by ON DELETE CASCADE."""
-    with get_connection() as connection:
-        cursor = connection.execute(
-            "DELETE FROM conversations WHERE id = ?",
-            (conversation_id,)
-        )
-        return cursor.rowcount > 0
