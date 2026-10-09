@@ -159,17 +159,204 @@ def get_conversation(conversation_id: int):
 # --------------------------------------------------
 
 
+# @app.post("/chat")
+# def chat(request: ChatRequest):
+
+#     # ---------------------------------------------------------
+#     # 1. Create a conversation if this is the first message.
+#     # ---------------------------------------------------------
+
+#     print("CHAT ENDPOINT CALLED")
+
+#     conversation_id = request.conversation_id
+
+#     if conversation_id is None:
+
+#         # Find the first user message.
+#         first_user_message = next(
+#             (
+#                 message
+#                 for message in request.messages
+#                 if message.role == "user"
+#             ),
+#             None
+#         )
+
+#         # Use the first user message as the conversation title.
+#         if first_user_message:
+#             title = first_user_message.content.strip()
+
+#             # Keep titles reasonably short.
+#             if len(title) > 50:
+#                 title = title[:50].rstrip() + "..."
+#         else:
+#             title = "New Chat"
+
+#         conversation_id = create_conversation(title)
+
+#         # ---------------------------------------------------------
+#         # 2. Get the latest user message.
+#         # ---------------------------------------------------------
+
+#         latest_user_message = next(
+#             (
+#                 message
+#                 for message in reversed(request.messages)
+#                 if message.role == "user"
+#             ),
+#             None
+#         )
+
+#         # ---------------------------------------------------------
+#         # 3. Save the user message to SQLite.
+#         # ---------------------------------------------------------
+
+#         if latest_user_message:
+#             with get_connection() as connection:
+#                 connection.execute(
+#                     """
+#                     INSERT INTO messages
+#                         (conversation_id, role, content)
+#                     VALUES (?, ?, ?)
+#                     """,
+#                     (
+#                         conversation_id,
+#                         latest_user_message.role,
+#                         latest_user_message.content
+#                     )
+#                 )
+
+#         # ---------------------------------------------------------
+#         # 4. Build the conversation for Groq.
+#         # ---------------------------------------------------------
+
+#         conversation = [
+#             {
+#                 "role": "system",
+#                 "content": (
+#                     "You are a helpful AI assistant. "
+#                     "Give clear, accurate and concise answers. "
+#                     "Use Markdown when it improves readability."
+#                 )
+#             }
+#         ]
+
+#         conversation.extend(
+#             [
+#                 {
+#                     "role": message.role,
+#                     "content": message.content
+#                 }
+#                 for message in request.messages
+#             ]
+#         )
+
+#         # ---------------------------------------------------------
+#         # 5. Generate and stream the AI response.
+#         # ---------------------------------------------------------
+
+#         def generate_response():
+
+#             try:
+#                 print("Starting Groq request...")
+#                 stream = client.chat.completions.create(
+#                     model="openai/gpt-oss-120b",
+#                     messages=conversation,
+#                     stream=True
+#                 )
+#                 print("Groq stream created successfully")
+
+#                 # Send the conversation ID to the frontend.
+#                 yield f'data: {json.dumps({"conversation_id": conversation_id})}\n\n'
+
+#                 # Keep the complete response in memory.
+#                 full_response = ""
+
+#                 for chunk in stream:
+#                     print("Received chunk:", chunk)
+#                     content = chunk.choices[0].delta.content
+
+#                     if content:
+
+#                         # Add token to complete response.
+#                         full_response += content
+
+#                         # Immediately send token to frontend.
+#                         event = json.dumps({
+#                             "token": content
+#                         })
+
+#                         yield f"data: {event}\n\n"
+
+#                 # -------------------------------------------------
+#                 # 6. Save the assistant response ONLY after
+#                 #    the complete stream finishes successfully.
+#                 # -------------------------------------------------
+
+#                 if full_response:
+
+#                     with get_connection() as connection:
+
+#                         connection.execute(
+#                             """
+#                             INSERT INTO messages
+#                                 (conversation_id, role, content)
+#                             VALUES (?, ?, ?)
+#                             """,
+#                             (
+#                                 conversation_id,
+#                                 "assistant",
+#                                 full_response
+#                             )
+#                         )
+
+#                         # Update conversation timestamp.
+#                         connection.execute(
+#                             """
+#                             UPDATE conversations
+#                             SET updated_at = CURRENT_TIMESTAMP
+#                             WHERE id = ?
+#                             """,
+#                             (conversation_id,)
+#                         )
+
+#                 # Tell frontend that streaming is complete.
+#                 yield 'data: {"done": true}\n\n'
+
+#             except Exception as e:
+
+#                 print("Groq streaming error:", str(e))
+
+#                 event = json.dumps({
+#                     "error": "The AI response was interrupted. Please try again."
+#                 })
+
+#                 yield f"data: {event}\n\n"
+
+#         # ---------------------------------------------------------
+#         # IMPORTANT:
+#         # StreamingResponse MUST be returned by chat(),
+#         # NOT from inside generate_response().
+#         # ---------------------------------------------------------
+
+#         return StreamingResponse(
+#             generate_response(),
+#             media_type="text/event-stream",
+#             headers={
+#                 "Cache-Control": "no-cache",
+#                 "X-Accel-Buffering": "no"
+#             }
+#         )
+
+
 @app.post("/chat")
 def chat(request: ChatRequest):
 
     # ---------------------------------------------------------
-    # 1. Create a conversation if this is the first message.
+    # 1. Create a new conversation only if needed.
     # ---------------------------------------------------------
 
-    # conversation_id = request.conversation_id
-
-    # if conversation_id is None:
-    #     conversation_id = create_conversation()
+    print("CHAT ENDPOINT CALLED")
 
     conversation_id = request.conversation_id
 
@@ -197,159 +384,157 @@ def chat(request: ChatRequest):
 
         conversation_id = create_conversation(title)
 
-        # ---------------------------------------------------------
-        # 2. Get the latest user message.
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # 2. Get the latest user message.
+    # ---------------------------------------------------------
 
-        latest_user_message = next(
-            (
-                message
-                for message in reversed(request.messages)
-                if message.role == "user"
-            ),
-            None
-        )
+    latest_user_message = next(
+        (
+            message
+            for message in reversed(request.messages)
+            if message.role == "user"
+        ),
+        None
+    )
 
-        # ---------------------------------------------------------
-        # 3. Save the user message to SQLite.
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # 3. Save the latest user message to SQLite.
+    # ---------------------------------------------------------
 
-        if latest_user_message:
-            with get_connection() as connection:
-                connection.execute(
-                    """
-                    INSERT INTO messages
-                        (conversation_id, role, content)
-                    VALUES (?, ?, ?)
-                    """,
-                    (
-                        conversation_id,
-                        latest_user_message.role,
-                        latest_user_message.content
-                    )
+    if latest_user_message:
+        with get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO messages
+                    (conversation_id, role, content)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    conversation_id,
+                    latest_user_message.role,
+                    latest_user_message.content
                 )
+            )
 
-        # ---------------------------------------------------------
-        # 4. Build the conversation for Groq.
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # 4. Build the conversation for Groq.
+    # ---------------------------------------------------------
 
-        conversation = [
+    conversation = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful AI assistant. "
+                "Give clear, accurate and concise answers. "
+                "Use Markdown when it improves readability."
+            )
+        }
+    ]
+
+    conversation.extend(
+        [
             {
-                "role": "system",
-                "content": (
-                    "You are a helpful AI assistant. "
-                    "Give clear, accurate and concise answers. "
-                    "Use Markdown when it improves readability."
-                )
+                "role": message.role,
+                "content": message.content
             }
+            for message in request.messages
         ]
+    )
 
-        conversation.extend(
-            [
-                {
-                    "role": message.role,
-                    "content": message.content
-                }
-                for message in request.messages
-            ]
-        )
+    # ---------------------------------------------------------
+    # 5. Generate and stream the AI response.
+    # ---------------------------------------------------------
 
-        # ---------------------------------------------------------
-        # 5. Generate and stream the AI response.
-        # ---------------------------------------------------------
+    def generate_response():
 
-        def generate_response():
+        try:
+            print("Starting Groq request...")
 
-            try:
+            stream = client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=conversation,
+                stream=True
+            )
 
-                stream = client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=conversation,
-                    stream=True
-                )
+            print("Groq stream created successfully")
 
-                # Send the conversation ID to the frontend.
-                yield f'data: {json.dumps({"conversation_id": conversation_id})}\n\n'
+            # Send conversation ID to frontend.
+            yield f'data: {json.dumps({"conversation_id": conversation_id})}\n\n'
 
-                # Keep the complete response in memory.
-                full_response = ""
+            # Store complete response.
+            full_response = ""
 
-                for chunk in stream:
+            for chunk in stream:
 
-                    content = chunk.choices[0].delta.content
+                print("Received chunk:", chunk)
 
-                    if content:
+                content = chunk.choices[0].delta.content
 
-                        # Add token to complete response.
-                        full_response += content
+                if content:
 
-                        # Immediately send token to frontend.
-                        event = json.dumps({
-                            "token": content
-                        })
+                    full_response += content
 
-                        yield f"data: {event}\n\n"
+                    event = json.dumps({
+                        "token": content
+                    })
 
-                # -------------------------------------------------
-                # 6. Save the assistant response ONLY after
-                #    the complete stream finishes successfully.
-                # -------------------------------------------------
+                    yield f"data: {event}\n\n"
 
-                if full_response:
+            # -------------------------------------------------
+            # 6. Save assistant response after stream completes.
+            # -------------------------------------------------
 
-                    with get_connection() as connection:
+            if full_response:
 
-                        connection.execute(
-                            """
-                            INSERT INTO messages
-                                (conversation_id, role, content)
-                            VALUES (?, ?, ?)
-                            """,
-                            (
-                                conversation_id,
-                                "assistant",
-                                full_response
-                            )
+                with get_connection() as connection:
+
+                    connection.execute(
+                        """
+                        INSERT INTO messages
+                            (conversation_id, role, content)
+                        VALUES (?, ?, ?)
+                        """,
+                        (
+                            conversation_id,
+                            "assistant",
+                            full_response
                         )
+                    )
 
-                        # Update conversation timestamp.
-                        connection.execute(
-                            """
-                            UPDATE conversations
-                            SET updated_at = CURRENT_TIMESTAMP
-                            WHERE id = ?
-                            """,
-                            (conversation_id,)
-                        )
+                    connection.execute(
+                        """
+                        UPDATE conversations
+                        SET updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                        (conversation_id,)
+                    )
 
-                # Tell frontend that streaming is complete.
-                yield 'data: {"done": true}\n\n'
+            # Tell frontend streaming is complete.
+            yield 'data: {"done": true}\n\n'
 
-            except Exception as e:
+        except Exception as e:
 
-                print("Groq streaming error:", str(e))
+            print("Groq streaming error:", str(e))
 
-                event = json.dumps({
-                    "error": "The AI response was interrupted. Please try again."
-                })
+            event = json.dumps({
+                "error": "The AI response was interrupted. Please try again."
+            })
 
-                yield f"data: {event}\n\n"
+            yield f"data: {event}\n\n"
 
-        # ---------------------------------------------------------
-        # IMPORTANT:
-        # StreamingResponse MUST be returned by chat(),
-        # NOT from inside generate_response().
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # 7. Return the StreamingResponse.
+    # ---------------------------------------------------------
 
-        return StreamingResponse(
-            generate_response(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no"
-            }
-        )
-
+    return StreamingResponse(
+        generate_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
     
