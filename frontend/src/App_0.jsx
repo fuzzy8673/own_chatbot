@@ -8,7 +8,6 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [conversations, setConversations] = useState([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const messagesEndRef = useRef(null);
 
@@ -24,24 +23,28 @@ function App() {
     });
   }, [messages]);
 
-  const loadConversations = async () => {
-    try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/conversations"
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to load conversations");
-      }
-
-      const data = await response.json();
-      setConversations(data.conversations);
-    } catch (error) {
-      console.error("Error loading conversations:", error);
-    }
-  };
-
   useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const response = await fetch(
+          "http://127.0.0.1:8000/conversations"
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to load conversations");
+        }
+
+        const data = await response.json();
+
+        setConversations(data.conversations);
+      } catch (error) {
+        console.error(
+          "Error loading conversations:",
+          error
+        );
+      }
+    };
+
     loadConversations();
   }, []);
 
@@ -174,7 +177,6 @@ function App() {
 
           if (event.conversation_id) {
             setConversationId(event.conversation_id);
-            await loadConversations();
           }
 
           if (event.token) {
@@ -240,85 +242,50 @@ function App() {
 
       {/* Header */}
       <header className="bg-gray-900 text-white p-4">
-        <div className="w-full flex justify-between items-center gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen((open) => !open)}
-              aria-label={sidebarOpen ? "Hide conversation sidebar" : "Show conversation sidebar"}
-              className="rounded-lg px-3 py-2 bg-gray-700 hover:bg-gray-600"
-            >
-              ☰
-            </button>
-            <h1 className="text-xl font-semibold">
-              🤖 AI Chatbot
-            </h1>
-          </div>
+        <div className="max-w-3xl mx-auto flex justify-between items-center">
+
+          <h1 className="text-xl font-semibold">
+            🤖 AI Chatbot
+          </h1>
 
           <button
             onClick={clearChat}
-            className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg"
+            disabled={messages.length === 0}
+            className="bg-gray-700 hover:bg-gray-600 disabled:opacity-40 px-4 py-2 rounded-lg"
           >
-            + New Chat
+            New Chat
           </button>
+
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Conversation sidebar */}
-        {sidebarOpen && (
-          <aside className="w-72 shrink-0 bg-gray-900 text-white flex flex-col border-r border-gray-700">
-            <div className="p-4">
+
+      {/* Chat messages */}
+      <main className="flex-1 max-w-3xl w-full mx-auto p-6 pb-32">
+
+        <div className="mb-6 bg-white rounded-lg shadow p-4">
+          <h2 className="font-semibold mb-3">
+            Saved Conversations
+          </h2>
+
+          <div className="flex flex-wrap gap-2">
+            {conversations.map((conversation) => (
               <button
-                type="button"
-                onClick={clearChat}
-                className="w-full rounded-lg border border-gray-600 px-3 py-3 text-left hover:bg-gray-800"
+                key={conversation.id}
+                onClick={() =>
+                  loadConversation(conversation.id)
+                }
+                disabled={loading}
+                className={`px-3 py-2 rounded-lg text-sm ${conversation.id === conversationId
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 hover:bg-gray-200"
+                  }`}
               >
-                <span className="mr-2">＋</span> New conversation
+                Chat {conversation.id}
               </button>
-            </div>
-
-            <div className="px-4 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Recent conversations
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-2 pb-4">
-              {conversations.length === 0 ? (
-                <p className="px-3 py-4 text-sm text-gray-400">
-                  Your conversations will appear here.
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {conversations.map((conversation) => (
-                    <button
-                      key={conversation.id}
-                      type="button"
-                      onClick={() => loadConversation(conversation.id)}
-                      disabled={loading}
-                      title={conversation.title}
-                      className={`w-full rounded-lg px-3 py-3 text-left text-sm transition ${
-                        conversation.id === conversationId
-                          ? "bg-gray-700 text-white"
-                          : "text-gray-200 hover:bg-gray-800"
-                      } disabled:cursor-not-allowed disabled:opacity-50`}
-                    >
-                      <span className="block truncate">
-                        {conversation.title || `Chat ${conversation.id}`}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-700 p-3 text-xs text-gray-400">
-              {conversations.length} saved {conversations.length === 1 ? "conversation" : "conversations"}
-            </div>
-          </aside>
-        )}
-
-        {/* Chat messages */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 pb-32">
+            ))}
+          </div>
+        </div>
 
         {messages.length === 0 && (
           <div className="text-center text-gray-500 mt-20">
@@ -500,13 +467,13 @@ function App() {
         {/* Invisible element used for auto-scroll */}
         <div ref={messagesEndRef} />
 
-        </main>
-      </div>
+      </main>
+
 
       {/* Input area */}
       <footer className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
 
-        <div className="max-w-4xl mx-auto flex gap-3">
+        <div className="max-w-3xl mx-auto flex gap-3">
 
           <textarea
             value={input}
@@ -528,7 +495,7 @@ function App() {
 
         </div>
 
-        <p className="text-xs text-gray-400 max-w-4xl mx-auto mt-2">
+        <p className="text-xs text-gray-400 max-w-3xl mx-auto mt-2">
           Enter to send • Shift + Enter for a new line
         </p>
 
