@@ -9,6 +9,8 @@ function App() {
   const [conversationId, setConversationId] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [editingConversationId, setEditingConversationId] = useState(null);
+  const [editedTitle, setEditedTitle] = useState("");
 
   const messagesEndRef = useRef(null);
 
@@ -235,6 +237,75 @@ function App() {
     setInput("");
   };
 
+  // Rename a saved conversation using the backend PATCH endpoint.
+  const handleRenameConversation = async (id) => {
+    const title = editedTitle.trim();
+
+    if (!title) {
+      alert("Conversation title cannot be empty.");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/conversations/${id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to rename conversation.");
+      }
+
+      setEditingConversationId(null);
+      setEditedTitle("");
+      await loadConversations();
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  // Confirm before deleting a conversation from the database.
+  const handleDeleteConversation = async (id, title) => {
+    const confirmed = window.confirm(
+      `Delete "${title || `Chat ${id}`}"? This will permanently delete its messages.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/conversations/${id}`,
+        { method: "DELETE" }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to delete conversation.");
+      }
+
+      // If the deleted conversation is open, reset the chat view.
+      if (id === conversationId) {
+        clearChat();
+      }
+
+      if (editingConversationId === id) {
+        setEditingConversationId(null);
+        setEditedTitle("");
+      }
+
+      await loadConversations();
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
 
@@ -290,22 +361,93 @@ function App() {
               ) : (
                 <div className="space-y-1">
                   {conversations.map((conversation) => (
-                    <button
+                    <div
                       key={conversation.id}
-                      type="button"
-                      onClick={() => loadConversation(conversation.id)}
-                      disabled={loading}
-                      title={conversation.title}
-                      className={`w-full rounded-lg px-3 py-3 text-left text-sm transition ${
+                      className={`rounded-lg px-2 py-2 transition ${
                         conversation.id === conversationId
-                          ? "bg-gray-700 text-white"
-                          : "text-gray-200 hover:bg-gray-800"
-                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                          ? "bg-gray-700"
+                          : "hover:bg-gray-800"
+                      }`}
                     >
-                      <span className="block truncate">
-                        {conversation.title || `Chat ${conversation.id}`}
-                      </span>
-                    </button>
+                      {editingConversationId === conversation.id ? (
+                        <form
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            handleRenameConversation(conversation.id);
+                          }}
+                          className="space-y-2"
+                        >
+                          <input
+                            autoFocus
+                            value={editedTitle}
+                            maxLength={100}
+                            onChange={(event) => setEditedTitle(event.target.value)}
+                            aria-label="Conversation title"
+                            className="w-full rounded border border-gray-500 bg-gray-800 px-2 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="submit"
+                              className="rounded bg-blue-600 px-2 py-1 text-xs hover:bg-blue-500"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingConversationId(null);
+                                setEditedTitle("");
+                              }}
+                              className="rounded bg-gray-600 px-2 py-1 text-xs hover:bg-gray-500"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => loadConversation(conversation.id)}
+                            disabled={loading}
+                            title={conversation.title}
+                            className="min-w-0 flex-1 rounded px-1 py-1 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <span className="block truncate">
+                              {conversation.title || `Chat ${conversation.id}`}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            title="Rename conversation"
+                            aria-label={`Rename ${conversation.title || `Chat ${conversation.id}`}`}
+                            disabled={loading}
+                            onClick={() => {
+                              setEditingConversationId(conversation.id);
+                              setEditedTitle(conversation.title || "");
+                            }}
+                            className="shrink-0 rounded px-2 py-1 text-gray-300 hover:bg-gray-600 hover:text-white disabled:opacity-50"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete conversation"
+                            aria-label={`Delete ${conversation.title || `Chat ${conversation.id}`}`}
+                            disabled={loading}
+                            onClick={() =>
+                              handleDeleteConversation(
+                                conversation.id,
+                                conversation.title
+                              )
+                            }
+                            className="shrink-0 rounded px-2 py-1 text-gray-300 hover:bg-red-700 hover:text-white disabled:opacity-50"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
